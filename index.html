@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>互相陪伴的100天</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300;1,500&family=Noto+Serif+SC:wght@300;500&display=swap">
+<style>
+/* 布局：WebGL 三维星空即页面。纵深星海缓缓迎面而来；立体星团聚成"100"；许愿后星涡旋转、跃迁、迸散，重聚成一束立体星光郁金香，远方地平线长出一片花田，极光、流星、花瓣出现 */
+:root {
+  --night: #02030b;
+  --deep: #0a1033;
+  --star: #f1f4ff;
+  --ice: #a9c8ff;
+  --gold: #ffe2a8;
+  --font-latin: "Cormorant Garamond", "Times New Roman", serif;
+  --font-cn: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; overflow: hidden; background: var(--night); color: var(--star); font-family: var(--font-cn); font-weight: 300; }
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: manipulation;
+  background: radial-gradient(140% 90% at 50% 115%, var(--deep), var(--night) 62%); }
+.ui { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+  pointer-events: none; text-align: center;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: clamp(22px, 5vh, 48px) clamp(26px, 6vh, 56px); }
+.top { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--font-latin); font-style: italic; font-weight: 300; letter-spacing: .5em; font-size: clamp(13px, 1.6vw, 16px); color: var(--ice); opacity: .85; }
+h1 { margin: 0; font-weight: 300; font-size: clamp(18px, 2.6vw, 24px); letter-spacing: .5em; text-indent: .5em; color: var(--star); opacity: .92;
+  text-shadow: 0 0 18px #a9c8ff55; }
+.bottom { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.whisper { min-height: 1.6em; font-size: clamp(15px, 2vw, 18px); letter-spacing: .3em; text-indent: .3em; color: var(--gold); opacity: 0; transition: opacity 1.6s ease;
+  text-shadow: 0 0 16px #ffe2a899; }
+.whisper.on { opacity: 1; }
+.wish { pointer-events: auto; font: inherit; font-weight: 500; font-size: clamp(15px, 2vw, 17px); letter-spacing: .4em; text-indent: .4em; color: var(--star);
+  padding: 13px 34px; border-radius: 999px; border: 1px solid #a9c8ff55; background: #0a103366; cursor: pointer;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 0 24px -6px #a9c8ff66, inset 0 0 18px -8px #a9c8ff88; transition: border-color .4s, box-shadow .4s, transform .4s, opacity .4s; }
+.wish:hover { border-color: #ffe2a8aa; box-shadow: 0 0 34px -4px #ffe2a888, inset 0 0 20px -8px #ffe2a8aa; transform: translateY(-2px); }
+.wish:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+.wish:disabled { opacity: .4; cursor: default; transform: none; }
+.fallback { position: fixed; inset: 0; display: grid; place-items: center; color: var(--ice); font-size: 15px; letter-spacing: .2em; }
+</style>
+
+</head>
+<body>
+<canvas id="stage" role="img" aria-label="三维星空：星辰聚成数字一百；许愿后星空跃迁，重聚成一束郁金香，远处长出星光花田"></canvas>
+<div class="ui">
+  <div class="top">
+    <div class="eyebrow">ONE HUNDRED DAYS</div>
+    <h1>互相陪伴的100天</h1>
+  </div>
+  <div class="bottom">
+    <div class="whisper" id="whisper" aria-live="polite"></div>
+    <button class="wish" id="wish" type="button">对着星空许个愿</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  if (!window.THREE) { document.body.insertAdjacentHTML('beforeend', '<div class="fallback">星空没能加载，请刷新一下</div>'); return; }
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const canvas = document.getElementById('stage');
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); }
+  catch (e) { document.body.insertAdjacentHTML('beforeend', '<div class="fallback">这台设备不支持 WebGL 星空</div>'); return; }
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene();
+  scene.fog = null;
+  const camera = new THREE.PerspectiveCamera(60, 1, 1, 6000);
+  camera.position.set(0, 0, 330);
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const TINT = {
+    white: [.95, .96, 1], ice: [.66, .78, 1], gold: [1, .88, .66], violet: [.77, .71, 1],
+    peach: [1, .77, .67], blush: [1, .73, .81], rose: [1, .64, .79], pink: [1, .82, .9], lav: [.84, .75, 1], cream: [1, .94, .84], leaf: [.62, .91, .8]
+  };
+  const U = { uTime: { value: 0 }, uPR: { value: renderer.getPixelRatio() }, uTravel: { value: 0 } };
+
+  /* ---------- 星点着色器：亮芯 + 光晕 + 十字星芒，近大远小 ---------- */
+  function starMaterial({ wrap = false, spikes = 1, alpha = 1, scale = 1 } = {}) {
+    return new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { uTime: U.uTime, uPR: U.uPR, uTravel: U.uTravel, uAlpha: { value: alpha }, uSpikes: { value: spikes }, uScale: { value: scale } },
+      vertexShader: `
+        attribute vec3 color; attribute float size; attribute float phase; attribute float alpha;
+        uniform float uTime, uPR, uTravel, uScale;
+        varying vec3 vColor; varying float vTw; varying float vA;
+        void main() {
+          vec3 p = position;
+          ${wrap ? 'p.z = mod(p.z + uTravel + 2600.0, 2900.0) - 2600.0;' : ''}
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          float tw = 0.55 + 0.45 * sin(uTime * (0.6 + fract(phase * 7.13) * 2.2) + phase * 6.283);
+          vTw = tw; vColor = color; vA = alpha;
+          ${wrap ? 'vA *= smoothstep(-2600.0, -1900.0, p.z) * smoothstep(320.0, 120.0, p.z);' : ''}
+          gl_PointSize = size * uScale * uPR * (330.0 / max(1.0, -mv.z)) * (0.75 + 0.35 * tw);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        uniform float uAlpha, uSpikes;
+        varying vec3 vColor; varying float vTw; varying float vA;
+        void main() {
+          vec2 c = gl_PointCoord - 0.5; float d = length(c);
+          float core = smoothstep(0.07, 0.0, d);
+          float glow = exp(-d * d * 30.0) * 0.6;
+          float halo = exp(-d * 7.0) * 0.18;
+          float sp = (smoothstep(0.03, 0.0, abs(c.x)) + smoothstep(0.03, 0.0, abs(c.y))) * smoothstep(0.5, 0.05, d) * 0.45 * uSpikes * vTw * vTw;
+          float a = (core + glow + halo + sp) * vTw * uAlpha * vA;
+          if (a < 0.004) discard;
+          vec3 col = mix(vColor, vec3(1.0), core * 0.85);
+          gl_FragColor = vec4(col * a, a);
+        }`
+    });
+  }
+  function makePoints(n, mat) {
+    const g = new THREE.BufferGeometry();
+    const attr = (name, k) => { const a = new Float32Array(n * k); g.setAttribute(name, new THREE.BufferAttribute(a, k)); return a; };
+    const pos = attr('position', 3), col = attr('color', 3), size = attr('size', 1), phase = attr('phase', 1), alpha = attr('alpha', 1);
+    alpha.fill(1);
+    for (let i = 0; i < n; i++) phase[i] = Math.random();
+    const pts = new THREE.Points(g, mat); pts.frustumCulled = false; scene.add(pts);
+    return { pts, g, pos, col, size, phase, alpha, n };
+  }
+  const setCol = (arr, i, t, k = 1) => { const c = TINT[t]; arr[i * 3] = c[0] * k; arr[i * 3 + 1] = c[1] * k; arr[i * 3 + 2] = c[2] * k; };
+
+  /* ---------- 1. 纵深星海（会迎面流动） ---------- */
+  const small = innerWidth * innerHeight < 500000;
+  const desktop = !small && matchMedia('(pointer: fine)').matches && innerWidth >= 1024;
+  const FIELD_STARS = small ? 4000 : desktop ? 14000 : 8000;
+  const deep = makePoints(FIELD_STARS, starMaterial({ wrap: true, spikes: 1 }));
+  for (let i = 0; i < FIELD_STARS; i++) {
+    deep.pos[i * 3] = rnd(-1400, 1400); deep.pos[i * 3 + 1] = rnd(-900, 900); deep.pos[i * 3 + 2] = rnd(-2600, 300);
+    setCol(deep.col, i, Math.random() < .72 ? 'white' : pick(['ice', 'ice', 'gold', 'violet']));
+    deep.size[i] = Math.random() ** 5 * 22 + 3;
+  }
+
+  /* ---------- 2. 远处的旋臂银河 ---------- */
+  const GAL = small ? 6000 : desktop ? 20000 : 12000;
+  const galaxy = makePoints(GAL, starMaterial({ spikes: .3, alpha: .55 }));
+  const galGroup = new THREE.Group(); galGroup.add(galaxy.pts); scene.add(galGroup);
+  galGroup.position.set(0, 60, -1300); galGroup.rotation.set(1.15, 0, .35);
+  for (let i = 0; i < GAL; i++) {
+    const r = Math.random() ** .7 * 1100, arm = i % 3, a = arm * 2.094 + r / 1100 * 5.2 + rnd(-.45, .45) * (1.2 - r / 1100);
+    galaxy.pos[i * 3] = Math.cos(a) * r; galaxy.pos[i * 3 + 1] = Math.sin(a) * r; galaxy.pos[i * 3 + 2] = rnd(-1, 1) * (60 - r * .04);
+    setCol(galaxy.col, i, r < 200 ? pick(['gold', 'cream', 'white']) : pick(['white', 'ice', 'ice', 'violet', 'lav']));
+    galaxy.size[i] = Math.random() ** 3 * 9 + 2;
+  }
+
+  /* ---------- 3. 星云 ---------- */
+  const neb = makePoints(14, starMaterial({ spikes: 0, alpha: .05 }));
+  for (let i = 0; i < 14; i++) {
+    neb.pos[i * 3] = rnd(-900, 900); neb.pos[i * 3 + 1] = rnd(-400, 500); neb.pos[i * 3 + 2] = rnd(-1800, -900);
+    setCol(neb.col, i, pick(['violet', 'ice', 'lav', 'peach'])); neb.size[i] = rnd(900, 1800);
+  }
+
+  /* ---------- 4. 极光（远景幕布） ---------- */
+  const auroraMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: U.uTime, uA: { value: .45 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `
+      uniform float uTime, uA; varying vec2 vUv;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+        return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+      float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ v += a * n(p); p *= 2.03; a *= 0.5; } return v; }
+      // 一道光幕：底边清晰明亮，向上渐隐，带竖向光丝
+      vec3 curtain(vec2 uv, float base, float seed, float speed){
+        float t = uTime * speed;
+        float edge = base + (uv.x - 0.5) * 0.12 + sin(uv.x * 3.1 + seed + t * 0.2) * 0.06 + (fbm(vec2(uv.x * 1.6 + seed, t * 0.25)) - 0.5) * 0.36;
+        float d = uv.y - edge;
+        float body = smoothstep(-0.05, 0.03, d) * exp(-max(d, 0.0) * 3.6);
+        float rays = fbm(vec2(uv.x * 34.0 + fbm(vec2(uv.x * 3.0 + seed, t * 0.3)) * 6.0, t * 0.35 + seed));
+        rays = 0.35 + 0.9 * pow(rays, 1.6);
+        float lip = exp(-abs(d) * 45.0) * 0.28;                   // 底边那一道亮线
+        vec3 green = vec3(0.32, 1.0, 0.62), teal = vec3(0.28, 0.85, 0.95), violet = vec3(0.62, 0.42, 1.0);
+        vec3 col = mix(green, teal, smoothstep(0.0, 0.18, d));
+        col = mix(col, violet, smoothstep(0.12, 0.45, d));
+        return col * (body * rays + lip);
+      }
+      void main(){
+        vec2 uv = vUv;
+        vec3 c = curtain(uv, 0.30, 1.3, 0.16) + curtain(uv, 0.42, 7.1, 0.12) * 0.6;
+        float sideFade = smoothstep(0.0, 0.22, uv.x) * smoothstep(1.0, 0.78, uv.x);
+        float topFade = smoothstep(1.0, 0.65, uv.y);
+        float shimmer = 0.85 + 0.15 * sin(uTime * 0.7 + uv.x * 9.0);
+        vec3 col = c * sideFade * topFade * shimmer * uA * 0.85;
+        float a = max(col.r, max(col.g, col.b));
+        gl_FragColor = vec4(col, a);
+      }`
+  });
+  const aurora = new THREE.Mesh(new THREE.PlaneGeometry(4200, 1500), auroraMat);
+  aurora.position.set(0, 430, -1500); aurora.rotation.x = .12;   // 极光暂不加入场景；要恢复时在这里 scene.add(aurora)
+
+  /* ---------- 5. 主星团：100 / 郁金香 / 心 ---------- */
+  const N = small ? 3200 : desktop ? 10000 : 6000;
+  const shape = makePoints(N, starMaterial({ spikes: .55 }));
+  const shapeGroup = new THREE.Group(); shapeGroup.add(shape.pts); scene.add(shapeGroup);
+  const vel = new Float32Array(N * 3), tgt = new Float32Array(N * 3), pivot = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    shape.pos[i * 3] = rnd(-900, 900); shape.pos[i * 3 + 1] = rnd(-600, 600); shape.pos[i * 3 + 2] = rnd(-1500, 200);
+    shape.size[i] = Math.random() ** 4 * 9 + (small ? 6 : 5.2);
+  }
+
+  // 郁金香轮廓（二维采样后赋予厚度）
+  function tulipHead(c, s) {       // 圆润的杯形，三片瓣尖收圆
+    c.beginPath(); c.moveTo(0, 0);
+    c.bezierCurveTo(-.5 * s, 0, -.6 * s, -.42 * s, -.54 * s, -.78 * s);
+    c.quadraticCurveTo(-.5 * s, -.98 * s, -.36 * s, -.9 * s);
+    c.quadraticCurveTo(-.26 * s, -.8 * s, -.18 * s, -.84 * s);
+    c.quadraticCurveTo(-.12 * s, -1.08 * s, 0, -1.08 * s);
+    c.quadraticCurveTo(.12 * s, -1.08 * s, .18 * s, -.84 * s);
+    c.quadraticCurveTo(.26 * s, -.8 * s, .36 * s, -.9 * s);
+    c.quadraticCurveTo(.5 * s, -.98 * s, .54 * s, -.78 * s);
+    c.bezierCurveTo(.6 * s, -.42 * s, .5 * s, 0, 0, 0); c.closePath();
+  }
+  function tulipVeins(c, s) {      // 两片交叠花瓣的边线
+    c.beginPath();
+    c.moveTo(-.06 * s, -.03 * s); c.bezierCurveTo(-.3 * s, -.2 * s, -.3 * s, -.62 * s, -.18 * s, -.84 * s);
+    c.moveTo(.06 * s, -.03 * s); c.bezierCurveTo(.3 * s, -.2 * s, .3 * s, -.62 * s, .18 * s, -.84 * s);
+  }
+  function layers(w, h) {
+    const mk = () => { const o = document.createElement('canvas'); o.width = w; o.height = h; const c = o.getContext('2d'); c.fillStyle = c.strokeStyle = '#fff'; c.lineCap = 'round'; return c; };
+    return { head: mk(), outline: mk(), vein: mk(), stem: mk(), leaf: mk() };
+  }
+  function tulip(L, bx, by, len, ang, s, leafSide) {
+    const hx = bx + Math.sin(ang) * len, hy = by - Math.cos(ang) * len;
+    for (const c of [L.head, L.outline, L.vein]) { c.save(); c.translate(hx, hy); c.rotate(ang * .8); }
+    tulipHead(L.head, s); L.head.globalAlpha = .55; L.head.fill(); L.head.globalAlpha = 1;
+    tulipHead(L.outline, s); L.outline.lineWidth = Math.max(2, s * .035); L.outline.stroke();
+    tulipVeins(L.vein, s * .96); L.vein.lineWidth = Math.max(1.5, s * .022); L.vein.stroke();
+    for (const c of [L.head, L.outline, L.vein]) c.restore();
+    L.stem.beginPath(); L.stem.moveTo(bx, by); L.stem.quadraticCurveTo(bx + Math.sin(ang) * len * .3, by - len * .55, hx, hy);
+    L.stem.lineWidth = Math.max(2.5, s * .07); L.stem.stroke();
+    if (leafSide) {
+      const lx = bx + Math.sin(ang) * len * .18, ly = by - len * .22, d = leafSide;
+      L.leaf.beginPath(); L.leaf.moveTo(lx, ly);
+      L.leaf.quadraticCurveTo(lx + d * s * 1.1, ly - len * .25, lx + d * s * .55, ly - len * .62);
+      L.leaf.quadraticCurveTo(lx + d * s * .25, ly - len * .3, lx, ly); L.leaf.closePath();
+      L.leaf.globalAlpha = .32; L.leaf.fill(); L.leaf.globalAlpha = 1; L.leaf.lineWidth = Math.max(2, s * .05); L.leaf.stroke();
+    }
+    return [hx, hy];
+  }
+  function sample(c, w, h, step = 2) {
+    const d = c.getImageData(0, 0, w, h).data, pts = [];
+    for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) { const a = d[(y * w + x) * 4 + 3]; if (a > 50 && Math.random() < a / 255) pts.push([x, y]); }
+    for (let i = pts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pts[i], pts[j]] = [pts[j], pts[i]]; }
+    return pts;
+  }
+  const take = (pts, n) => Array.from({ length: n }, (_, i) => pts[i % Math.max(1, pts.length)] || [300, 300]);
+  const HEADS = [['rose', 'pink', 'cream'], ['pink', 'blush', 'white'], ['blush', 'rose', 'cream']];
+  const FIELD_TINTS = [['ice', 'white'], ['white', 'ice'], ['ice', 'violet']];
+  const S = 900, K = 1 / 3;   // 采样画布 600px → 世界坐标 300 单位
+  let pivotWorld = 0;
+  function buildTargets(kind) {
+    const out = [];
+    const w = (x, y, z, t) => out.push({ x: (x - S / 2) * K, y: -(y - S / 2) * K, z, t });
+    if (kind === 'tulips') {
+      const base = S * .97, s = S * .19;
+      [[-.28, .5, 0, -1], [0, .62, 1, 0], [.3, .46, 2, 1]].forEach(([ang, len, tint, leaf]) => {
+        const L = layers(S, S); const [hx, hy] = tulip(L, S / 2, base, S * len, ang, s, leaf);
+        const nh = Math.round(N * .235), cup = (x) => { const dx = (x - hx) / (s * .62); return Math.sqrt(Math.max(0, 1 - dx * dx)) * s * K * .18; };
+        take(sample(L.outline, S, S), Math.round(nh * .45)).forEach(([x, y]) => w(x, y, cup(x) + rnd(-1, 1), Math.random() < .3 ? 'cream' : HEADS[tint][0]));
+        take(sample(L.vein, S, S), Math.round(nh * .17)).forEach(([x, y]) => w(x, y, cup(x) * .6, Math.random() < .5 ? 'gold' : 'white'));
+        take(sample(L.head, S, S), Math.round(nh * .38)).forEach(([x, y]) => w(x, y, (Math.random() < .5 ? -1 : 1) * cup(x) + rnd(-1, 1), Math.random() < .75 ? HEADS[tint][0] : HEADS[tint][1]));
+        L.stem.canvas._pts = sample(L.stem, S, S); L.leaf.canvas._pts = sample(L.leaf, S, S);
+        (buildTargets._stems = buildTargets._stems || []).push(L.stem.canvas._pts, L.leaf.canvas._pts);
+      });
+      const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+      const stems = shuffle(buildTargets._stems.filter((_, i) => i % 2 === 0).flat()), leaves = shuffle(buildTargets._stems.filter((_, i) => i % 2 === 1).flat());
+      buildTargets._stems = null;
+      take(stems, Math.round(N * .08)).forEach(([x, y]) => w(x, y, rnd(-1.5, 1.5), Math.random() < .8 ? 'leaf' : 'gold'));
+      take(leaves, N - out.length).forEach(([x, y]) => w(x, y, rnd(-3, 3), Math.random() < .8 ? 'leaf' : 'ice'));
+      pivotWorld = -(base - S / 2) * K;
+      return out;
+    }
+    const o = document.createElement('canvas'); o.width = o.height = S; const c = o.getContext('2d'); c.fillStyle = c.strokeStyle = '#fff';
+    if (kind === '100') {
+      c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `italic 500 ${S * .6}px "Cormorant Garamond", Georgia, serif`;
+      c.fillText('100', S / 2, S / 2);
+      take(sample(c, S, S), N).forEach(([x, y]) => w(x, y, rnd(-4, 4), Math.random() < .55 ? 'white' : pick(['ice', 'ice', 'gold', 'violet'])));
+    } else {
+      const s = S / 40; c.beginPath();
+      for (let i = 0; i <= 240; i++) {
+        const t = i / 240 * Math.PI * 2, x = 16 * Math.sin(t) ** 3, y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        i ? c.lineTo(S / 2 + x * s, S / 2 - y * s - s) : c.moveTo(S / 2 + x * s, S / 2 - y * s - s);
+      }
+      c.closePath(); c.globalAlpha = .4; c.fill(); c.globalAlpha = 1; c.lineWidth = s * 1.3; c.stroke();
+      take(sample(c, S, S), N).forEach(([x, y]) => {
+        const dx = (x - S / 2) / (S * .4), dy = (y - S / 2) / (S * .4), rr = Math.max(0, 1 - dx * dx - dy * dy);
+        w(x, y, (Math.random() < .5 ? -1 : 1) * Math.sqrt(rr) * 14 + rnd(-2, 2), Math.random() < .5 ? 'gold' : pick(['white', 'peach', 'cream']));
+      });
+    }
+    pivotWorld = 0;
+    return out;
+  }
+  let kind = '100';
+  function retarget(k) {
+    kind = k;
+    const T = buildTargets(k);
+    for (let i = 0; i < N; i++) {
+      const p = T[i]; tgt[i * 3] = p.x; tgt[i * 3 + 1] = p.y; tgt[i * 3 + 2] = p.z; pivot[i] = pivotWorld - p.y;
+      setCol(shape.col, i, p.t);
+    }
+    shape.g.attributes.color.needsUpdate = true;
+  }
+
+  /* ---------- 6. 纵深郁金香花田 ---------- */
+  const TPL = (() => {
+    const w = 120, h = 240, L = layers(w, h); tulip(L, w / 2, h - 4, h * .62, 0, w * .32, 1);
+    const f = (c, n, part) => take(sample(c, w, h, 3), n).map(([x, y]) => ({ x: (x - w / 2) / w, y: (h - y) / w, part }));
+    return [...f(L.outline, 24, 'head'), ...f(L.vein, 6, 'head'), ...f(L.head, 12, 'head'), ...f(L.stem, 8, 'leaf'), ...f(L.leaf, 8, 'leaf')];
+  })();
+  const FT = small ? 90 : desktop ? 240 : 160;
+  const fieldPts = makePoints(FT * TPL.length, starMaterial({ spikes: .6 }));
+  const tulips = Array.from({ length: FT }, () => {
+    const z = rnd(-2300, 120), spread = 300 + (120 - z) * .9;
+    return { x: rnd(-spread, spread), z, h: rnd(48, 78), tint: pick(FIELD_TINTS), p: Math.random() * 6.28, grow: 0, delay: rnd(0, 90) + (120 - z) * .05 };
+  }).sort((a, b) => a.z - b.z);
+  tulips.forEach((f, j) => TPL.forEach((q, k) => {
+    const i = j * TPL.length + k;
+    setCol(fieldPts.col, i, q.part === 'head' ? (Math.random() < .7 ? f.tint[0] : f.tint[1]) : 'ice', q.part === 'head' ? 1 : .75);
+    fieldPts.size[i] = q.part === 'head' ? rnd(6, 10) : rnd(4, 6); fieldPts.alpha[i] = 0;
+  }));
+  const GROUND = -175;
+
+  /* ---------- 7. 花瓣 ---------- */
+  const PN = small ? 260 : desktop ? 700 : 450;
+  const petals = makePoints(PN, starMaterial({ spikes: 0 }));
+  const pv = Array.from({ length: PN }, () => ({ vx: rnd(-.2, .2), vy: rnd(-.7, -.3), vz: rnd(-.2, .2), sw: Math.random() * 6.28, live: false }));
+  for (let i = 0; i < PN; i++) { setCol(petals.col, i, pick(['peach', 'blush', 'lav', 'cream'])); petals.size[i] = rnd(9, 16); petals.alpha[i] = 0; }
+  function spawnPetal(i) {
+    petals.pos[i * 3] = rnd(-700, 700); petals.pos[i * 3 + 1] = rnd(320, 700); petals.pos[i * 3 + 2] = rnd(-1200, 250);
+    pv[i].live = true; petals.alpha[i] = rnd(.35, .8);
+  }
+
+  /* ---------- 8. 星屑（点击 / 迸发） ---------- */
+  const SP = 900;
+  const sparks = makePoints(SP, starMaterial({ spikes: 1 }));
+  const sv = new Float32Array(SP * 3), slife = new Float32Array(SP); let sHead = 0;
+  for (let i = 0; i < SP; i++) { sparks.alpha[i] = 0; sparks.size[i] = rnd(4, 12); }
+  function burst(x, y, z, n, power) {
+    for (let k = 0; k < n; k++) {
+      const i = sHead = (sHead + 1) % SP, th = Math.random() * 6.28, ph = Math.acos(rnd(-1, 1)), v = rnd(.3, 1) * power;
+      sparks.pos[i * 3] = x; sparks.pos[i * 3 + 1] = y; sparks.pos[i * 3 + 2] = z;
+      sv[i * 3] = Math.sin(ph) * Math.cos(th) * v; sv[i * 3 + 1] = Math.sin(ph) * Math.sin(th) * v; sv[i * 3 + 2] = Math.cos(ph) * v;
+      slife[i] = 1; setCol(sparks.col, i, pick(['white', 'gold', 'ice', 'peach', 'lav']));
+    }
+    sparks.g.attributes.color.needsUpdate = true;
+  }
+
+  /* ---------- 9. 流星 ---------- */
+  const meteors = [];
+  const meteorMat = () => new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  function spawnMeteor() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array([1, .97, .9, .1, .15, .3]), 3));
+    const line = new THREE.Line(g, meteorMat()); line.frustumCulled = false; scene.add(line);
+    const dir = new THREE.Vector3(-rnd(.7, 1), -rnd(.35, .6), rnd(-.1, .3)).normalize();
+    meteors.push({ line, p: new THREE.Vector3(rnd(-200, 1200), rnd(250, 700), rnd(-1400, -200)), dir, v: rnd(14, 24), len: rnd(120, 260), life: 1 });
+  }
+
+  /* ---------- 状态与相机 ---------- */
+  let phase = 'idle', phaseT = 0, wished = 0, auroraT = .45, travelSpeed = 0, warp = 0, meteorRate = .006;
+  const mouse = { x: 0, y: 0, sx: 0, sy: 0, ndc: new THREE.Vector2(-9, -9) };
+  const ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), hit = new THREE.Vector3();
+  function resize() {
+    const w = innerWidth, h = innerHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    const fit = Math.min(1, camera.aspect * 1.15); shapeGroup.scale.setScalar(fit);
+    U.uPR.value = renderer.getPixelRatio();
+  }
+  addEventListener('resize', resize); resize();
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.max(0, Math.min(50, now - last)) / 16.7; last = now;
+    const t = now * .001; U.uTime.value = t;
+    mouse.sx += (mouse.x - mouse.sx) * .04; mouse.sy += (mouse.y - mouse.sy) * .04;
+
+    // 相机：缓慢漂移 + 鼠标视差 + 跃迁时的推近与轻微侧倾
+    camera.position.x = mouse.sx * 14;
+    camera.position.y = -mouse.sy * 9;
+    camera.position.z = 330 - warp * 40;
+    camera.fov = 60 + warp * 10; camera.updateProjectionMatrix();
+    camera.lookAt(0, 0, -50);
+
+    U.uTravel.value += (travelSpeed + warp * 38) * dt;
+    galGroup.rotation.z += (.00008 + warp * .006) * dt;
+    galaxy.pts.material.uniforms.uAlpha.value = .5 + Math.min(wished, 2) * .15 + warp * .5;
+    auroraMat.uniforms.uA.value += (auroraT - auroraMat.uniforms.uA.value) * .008 * dt;
+
+    // 主星团动力学
+    phaseT += dt;
+    if (phase === 'vortex' && phaseT > 130) {
+      phase = 'burst'; phaseT = 0; auroraT = 1.1; meteorRate = .16;
+      for (let i = 0; i < N; i++) {
+        const th = Math.random() * 6.28, ph = Math.acos(rnd(-1, 1)), v = rnd(6, 20);
+        vel[i * 3] = Math.sin(ph) * Math.cos(th) * v; vel[i * 3 + 1] = Math.sin(ph) * Math.sin(th) * v; vel[i * 3 + 2] = Math.cos(ph) * v * 1.4;
+      }
+      burst(0, 0, 0, 260, 14);
+      for (let i = 0; i < PN * .6; i++) spawnPetal(i);
+    } else if (phase === 'burst' && phaseT > 60) { phase = 'gather'; phaseT = 0; }
+    else if (phase === 'gather' && phaseT > 300) { phase = 'idle'; meteorRate = .035; btn.disabled = false; }
+    warp += ((phase === 'vortex' ? Math.min(1, phaseT / 90) : 0) - warp) * (phase === 'vortex' ? .08 : .03) * dt;
+
+    const sway = kind === 'tulips' ? Math.sin(t * .7) * .025 : 0;
+    const beat = kind === 'heart' ? 1 + .03 * Math.max(0, Math.sin(t * 3.2)) ** 10 : 1;
+    shapeGroup.rotation.y = Math.sin(t * .18) * .1 + mouse.sx * .12;
+    shapeGroup.rotation.x = mouse.sy * .05;
+    shapeGroup.position.y = 0;
+    const P = shape.pos;
+    for (let i = 0; i < N; i++) {
+      const ix = i * 3;
+      if (phase === 'vortex') {
+        const x = P[ix], y = P[ix + 1], r = Math.hypot(x, y) || 1, a = Math.atan2(y, x) + (.03 + phaseT * .0011) * dt * (180 / (r + 40));
+        const nr = r * (1 - .014 * dt);
+        P[ix] = Math.cos(a) * nr; P[ix + 1] = Math.sin(a) * nr; P[ix + 2] += (Math.sin(a * 3 + t * 4) * 40 - P[ix + 2]) * .05 * dt;
+        continue;
+      }
+      if (phase !== 'burst') {
+        let gx = tgt[ix] * beat, gy = tgt[ix + 1] * beat, gz = tgt[ix + 2] * beat;
+        if (sway) { const hh = pivot[i]; gx += hh * sway; gy -= Math.abs(hh * sway) * .15; }
+        const k = phase === 'gather' ? .005 + phaseT * .0001 : .02;
+        vel[ix] += (gx - P[ix]) * k * dt; vel[ix + 1] += (gy - P[ix + 1]) * k * dt; vel[ix + 2] += (gz - P[ix + 2]) * k * dt;
+      }
+      const damp = phase === 'burst' ? .965 : .87;
+      vel[ix] *= damp; vel[ix + 1] *= damp; vel[ix + 2] *= damp;
+      P[ix] += vel[ix] * dt; P[ix + 1] += vel[ix + 1] * dt; P[ix + 2] += vel[ix + 2] * dt;
+    }
+    // 鼠标拨动：把指针投到星团平面上
+    if (mouse.ndc.x > -2 && phase !== 'vortex') {
+      ray.setFromCamera(mouse.ndc, camera);
+      if (ray.ray.intersectPlane(plane, hit)) {
+        shapeGroup.worldToLocal(hit);
+        for (let i = 0; i < N; i++) {
+          const ix = i * 3, dx = P[ix] - hit.x, dy = P[ix + 1] - hit.y, d2 = dx * dx + dy * dy;
+          if (d2 < 1300) { const d = Math.sqrt(d2) || 1, f = (1300 - d2) / 1300 * 1.6; vel[ix] += dx / d * f; vel[ix + 1] += dy / d * f; vel[ix + 2] += f * .8; }
+        }
+      }
+    }
+    shape.g.attributes.position.needsUpdate = true;
+
+    // 花田
+    if (wished) {
+      const F = fieldPts;
+      tulips.forEach((f, j) => {
+        if (f.delay > 0) f.delay -= dt; else f.grow = Math.min(1, f.grow + .007 * dt);
+        const e = 1 - (1 - f.grow) ** 3, sw = Math.sin(t * .8 + f.p + f.x * .004) * .07;
+        TPL.forEach((q, k) => {
+          const i = j * TPL.length + k, yy = q.y * f.h * e;
+          F.pos[i * 3] = f.x + q.x * f.h + yy * sw; F.pos[i * 3 + 1] = GROUND + yy; F.pos[i * 3 + 2] = f.z;
+          F.alpha[i] = e * (q.part === 'head' ? 1 : .7);
+        });
+      });
+      F.g.attributes.position.needsUpdate = true; F.g.attributes.alpha.needsUpdate = true;
+    }
+
+    // 花瓣
+    if (wished) {
+      for (let i = 0; i < PN; i++) {
+        const v = pv[i];
+        if (!v.live) { if (Math.random() < .0015 * dt) spawnPetal(i); continue; }
+        v.sw += .02 * dt;
+        petals.pos[i * 3] += (v.vx + Math.sin(v.sw) * .5) * dt; petals.pos[i * 3 + 1] += v.vy * dt; petals.pos[i * 3 + 2] += v.vz * dt;
+        if (petals.pos[i * 3 + 1] < GROUND - 20) { v.live = false; petals.alpha[i] = 0; }
+      }
+      petals.g.attributes.position.needsUpdate = true; petals.g.attributes.alpha.needsUpdate = true;
+    }
+
+    // 星屑
+    for (let i = 0; i < SP; i++) {
+      if (slife[i] <= 0) continue;
+      const ix = i * 3;
+      sv[ix] *= .965; sv[ix + 1] = sv[ix + 1] * .965 - .02; sv[ix + 2] *= .965;
+      sparks.pos[ix] += sv[ix] * dt; sparks.pos[ix + 1] += sv[ix + 1] * dt; sparks.pos[ix + 2] += sv[ix + 2] * dt;
+      slife[i] -= .011 * dt; sparks.alpha[i] = Math.max(0, slife[i]);
+    }
+    sparks.g.attributes.position.needsUpdate = true; sparks.g.attributes.alpha.needsUpdate = true;
+
+    // 流星
+    if (Math.random() < meteorRate * dt) spawnMeteor();
+    for (let i = meteors.length - 1; i >= 0; i--) {
+      const m = meteors[i]; m.p.addScaledVector(m.dir, m.v * dt); m.life -= .01 * dt;
+      const a = m.line.geometry.attributes.position.array, tail = m.p.clone().addScaledVector(m.dir, -m.len);
+      a[0] = m.p.x; a[1] = m.p.y; a[2] = m.p.z; a[3] = tail.x; a[4] = tail.y; a[5] = tail.z;
+      m.line.geometry.attributes.position.needsUpdate = true; m.line.material.opacity = Math.max(0, m.life);
+      if (m.life <= 0) { scene.remove(m.line); m.line.geometry.dispose(); m.line.material.dispose(); meteors.splice(i, 1); }
+    }
+
+    renderer.render(scene, camera);
+    if (!reduce) requestAnimationFrame(frame);
+  }
+
+  /* ---------- 交互 ---------- */
+  addEventListener('pointermove', e => {
+    mouse.x = e.clientX / innerWidth * 2 - 1; mouse.y = e.clientY / innerHeight * 2 - 1;
+    mouse.ndc.set(mouse.x, -mouse.y);
+  });
+  document.addEventListener('pointerleave', () => mouse.ndc.set(-9, -9));
+  canvas.addEventListener('pointerdown', e => {
+    const ndc = new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight * 2 - 1));
+    ray.setFromCamera(ndc, camera);
+    if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), 60), hit)) burst(hit.x, hit.y, hit.z, 70, 5);
+    if (reduce) frame(performance.now());
+  });
+
+  const WHISPERS = ['送你一束星光郁金香', '星星听见了', '愿每一个一百天，都有花，有星星，有你'];
+  const SEQ = ['100', 'tulips', 'heart', 'tulips'];
+  const btn = document.getElementById('wish'), wh = document.getElementById('whisper');
+  let step = 0;
+  btn.addEventListener('click', () => {
+    wh.textContent = WHISPERS[step % WHISPERS.length]; wh.classList.add('on');
+    clearTimeout(btn._t); btn._t = setTimeout(() => wh.classList.remove('on'), 6500);
+    step++; wished = Math.min(wished + 1, 3);
+    retarget(SEQ[step % SEQ.length]);
+    if (reduce) {
+      auroraT = auroraMat.uniforms.uA.value = 1.1;
+      for (let i = 0; i < N * 3; i++) shape.pos[i] = tgt[i];
+      tulips.forEach(f => { f.grow = 1; f.delay = 0; });
+      shape.g.attributes.position.needsUpdate = true; frame(performance.now()); return;
+    }
+    btn.disabled = true; btn.textContent = '再许一个愿';
+    phase = 'vortex'; phaseT = 0; meteorRate = .02;
+  });
+
+  retarget('100');
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+    retarget(kind);
+    if (reduce) { for (let i = 0; i < N * 3; i++) shape.pos[i] = tgt[i]; shape.g.attributes.position.needsUpdate = true; frame(performance.now()); }
+  });
+  if (reduce) frame(performance.now()); else requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
